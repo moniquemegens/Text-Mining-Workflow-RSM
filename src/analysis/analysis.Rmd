@@ -1,0 +1,245 @@
+---
+title: "Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(data.table)
+library(ggplot2)
+library(dplyr)
+
+# read final data
+tweets_whitehouse_conference <- fread('../../gen/analysis/temp/preclean.csv')
+```
+
+## Tweeting behavior, emotions, and subjectivity of different source types during the Coronavirus White House Press Briefing (USA)
+
+### Research question
+To what extent does source type (Twitter for Android vs. Twitter for iPhone vs. Twitter Web App) influence tweeting behavior, emotions and subjectivity expressed in the tweets? 2. Motivation for the stated research question According to research about personality differences between different types of smartphone users, it turns out that iPhone users are more extroverted than Android users (Shaw, 2016). Furthermore, iPhone users are more likely to break rules for personal gain (Sandoiu, 2016). Therefore, it is expected that there is more polarity and subjectivity for iPhone users than for Android and Web App users. Governmental institutions and advertisers could use this information to target with more customized messages in a way that it fits the source type best by matching their communication style.
+
+### Data collection
+The original dataset (created by 4 students from Tilburg University) contained over 60,000 tweets. However, in the precleaning stage of the analysis, it has been guaranteed that only the tweets that are relevant to this specific event were filtered. Therefore, the text of the tweets must include one or more of the following hashtags: ‘donaldtrump’, ‘trump’, ‘presidenttrump’, ‘whitehouse’ and/or ‘whitehousebriefing’. Besides that, it has been made sure the tweets were written in English, allowing us to perform sentiment analysis more accurately. The filtered dataset that is used to answer the research question contains 5,672 tweets of which 3,332 are retweets. When parsing the text, a swear word counter is integrated in the script. Furthermore, the user id, number of followers, number of following, timestamp, source and the text of the tweets are parsed in order to analyze the results. Thereafter, some minor changes have been made to the text mining file to perform text mining more accurately. By replacing commonly used punctuation marks with white spaces, it is guaranteed that words joined by punctuation marks are all assessed by the text blob library. No other datasets were used.
+
+### Analysis
+Note that the conclusions in this report are not based on a significance level and can be seen as an exploratory research.
+
+Given the fact that the goal of the analysis is to link sentiment to the Twitter source, an overview of the different source types is given. 
+
+```{r}
+source_summary <- tweets_whitehouse_conference %>%
+  group_by(source) %>%
+  summarise("number_of_tweets" = n()) %>%
+  arrange(desc(number_of_tweets))
+
+source_summary
+```
+
+```{r}
+tweets_whitehouse_conference <- tweets_whitehouse_conference %>%
+  filter(source == "Twitter for iPhone" | source == "Twitter Web App" | source ==  "Twitter for Android") %>%
+  group_by(source)
+
+number_of_tweets = nrow(tweets_whitehouse_conference)
+number_of_tweets
+
+number_of_retweet = sum(tweets_whitehouse_conference$retweet == TRUE)
+number_of_retweet
+```
+
+According to the table it can be concluded that the most used source types for tweeting during the White House Coronavirus Task Force Briefing on April 27, 2020 are Twitter for iPhone (2,177), Twitter Web App (1,804) and Twitter for Android (1,691). In total there are over 87 source types from which the tweets originate. In the remainder of this report, the focus of the analysis lays on the top three most used source types. This has been done since these three sources generate a sufficient number of tweets (exceeds the amount of 1,000), which is beneficial for the reliability of the analysis and keeps the plots and statistics easy to interpret. Furthermore, the analysis is done by aggregating over the time. In this case, the tweets are divided into time intervals of ten minutes. This results in a total amount of nine time intervals during the press conference.
+
+### Number of tweets per source type
+This section is about the relationship between the number of tweets and the source type. 
+
+```{r}
+tweets_per_source <- tweets_whitehouse_conference %>%
+  group_by(source, retweet) %>%
+  summarise("number_tweets_per_source" = n())
+tweets_per_source
+```
+
+```{r}
+plot_tweets_per_source <- tweets_whitehouse_conference %>%
+  mutate("number_tweets_per_source" = n()) %>%
+  ggplot(aes(x = source, fill = retweet)) +
+  geom_bar(position = "dodge") +
+  scale_y_continuous(name = "Number of tweets") +
+  scale_x_discrete(name = "Source type") +
+  labs(title = "Number of tweets per source type",
+       fill = "Retweet")
+  
+plot_tweets_per_source 
+```
+
+In the graph (and table) above, the number of tweets (original tweets vs. retweets) per source type are shown. As can be seen in the figure, most tweets originate from an iPhone. Interesting to see is that the difference in number of tweets and retweets is almost nihil for Twitter Web App. In ascending order, the most retweets originate from Twitter for iPhone followed by Twitter for Android. The lowest number of retweets originated from Twitter Web app. In all cases, the number of retweets is higher than the number of original tweets.
+
+### Number of tweets over time per source type
+Furthermore, the number of tweets per source type is plotted over time, with time intervals of 10 minutes.
+
+```{r}
+linegraph_tweets_over_time_per_source <- tweets_whitehouse_conference %>%
+  ggplot(aes(x = time_interval, group = source, color = source)) +
+  geom_line(stat = "count") +
+  scale_y_continuous(name = "Number of tweets") +
+  scale_x_discrete(name = "Time intervals of 10 minutes", 
+                   labels = c(1, 2, 3, 4, 5, 6, 7, 8, 9)) +
+  scale_color_discrete(name = "Source type") +
+  labs(title = "Number of tweets over time per source type")
+
+linegraph_tweets_over_time_per_source
+```
+
+As already mentioned, the graph above also shows that Twitter for iPhone is the mostly used source type. An exception is made on interval 4, where Twitter Web App generates a slightly higher number of tweets. Overall, it can be concluded that interval 7 leads to the peek for all three source types. More tweets are posted towards the end of the event and after the event. This is probably due to the questions journalists ask after the official part of the briefing ended, since Trump is known for his vicious relationship with the press. Thus, the assumption can be made that during the press conference Twitter users are paying more attention and at the end become more active in tweeting about the event.
+
+### Polarity per source type
+To get a clear overview of the distribution of the sentiment of tweets originating from iPhone, Android and Web App, the tweets have been divided into three categories, namely positive (where polarity > 0), neutral (where polarity = 0), and negative (where polarity < 0).
+
+```{r}
+plot_tweets_per_source_per_sent_lev <- tweets_whitehouse_conference %>%
+  mutate("number_tweets_per_source" = n()) %>%
+  ggplot(aes(x = source, fill = polarity_category)) +
+  geom_bar(position = "dodge") +
+  scale_y_continuous(name = "Number of tweets") +
+  scale_x_discrete(name = "Source type") +
+  scale_fill_discrete(labels = c("Negative", "Neutral", "Positive")) +
+  labs(title = "Number of tweets per source type per polarity category",
+       fill = "Polarity category")
+
+plot_tweets_per_source_per_sent_lev
+```
+
+From the graph above, it can be concluded that relative few tweets are classified as negative for all source types. Overall, iPhone users seem to be more positive compared to Web App and Android users. For Android and Web App users it can be concluded that there are more neutral tweets than positive tweets.
+
+However, only looking at the number of tweets in each polarity category would give an incomplete overview. Therefore, the average polarity over time for the difference source types has also been plotted and can be seen in the graph below.
+
+```{r}
+polarity_over_time <- tweets_whitehouse_conference %>%
+  group_by(source, time_interval, polarity_category) %>%
+  mutate("average_polarity" = mean(polarity)) %>% 
+  ggplot(aes(x = time_interval, y = average_polarity, group = polarity_category, 
+                               color = polarity_category)) +
+  geom_line() +
+  facet_grid("." ~ source) +
+  scale_y_continuous(name = "Average polarity per category") +
+  scale_x_discrete(name = "Time intervals of 10 minutes", 
+                   labels = c(1, 2, 3, 4, 5, 6, 7, 8, 9)) +
+  scale_color_discrete(name = "Polarity category") +
+  labs(title = "Polarity of tweets over time per source type")
+
+polarity_over_time
+```
+
+It is interesting to look at the range of the y-axes. The range of negative classified tweets is wider, suggesting that negative classified tweets are more polarized than positive classified ones. This holds for all source types but especially for Twitter Web App users.
+
+For Android users there seems to be little variation in average polarity over time, whereas the line for iPhone shows more variation. This suggests that iPhone users tend to fluctuate more in emotion than Android users.
+
+### Subjectivity per source type
+Another score that can be analyzed is subjectivity (higher subjectivity - with a range from 0-1 whereby 1 indicates high subjectivity - suggests that the tweets contain less factual/more opinionated text). Table 2 shows the average subjectivity per source type.
+
+```{r}
+subjectivity_summary <- tweets_whitehouse_conference %>%
+  summarise("average_subjectivity" = mean(subjectivity))
+
+subjectivity_summary
+```
+
+Overall, iPhone users express more subjectivity in the tweets, relative to the other source types. However, the differences are little, which leads to the conclusion that the average subjectivity is almost the same across all the three sources.
+
+The average subjectivity of the tweets sent by Twitter users, using the three different source types, is also plotted over time. This is shown in the graph below.
+
+```{r}
+subjectivity_over_time <- tweets_whitehouse_conference %>%
+  group_by(source, time_interval) %>%
+  mutate("average_subjectivity" = mean(subjectivity)) %>% 
+  ggplot(aes(x = time_interval, y = average_subjectivity, group = source, 
+                               color = source)) +
+  geom_line() +
+  scale_y_continuous(name = "Average polarity per category") +
+  scale_x_discrete(name = "Time intervals of 10 minutes", 
+                   labels = c(1, 2, 3, 4, 5, 6, 7, 8, 9)) +
+  scale_color_discrete(name = "Source type") +
+  labs(title = "Average subjectivity of tweets over time per source type")
+
+subjectivity_over_time
+```
+
+Since the subjectivity of tweets originating from Web App are fluctuating a lot there is no straight conclusion that can be drawn from this line in comparison with the other sources.
+
+However, this graph shows that the overall fluctuation of average polarity for all the sources follows a similar path. Overall, during the time intervals iPhone users almost always show a higher subjectivity and Twitter for Android users tend to be more objective. Overall, iPhone users seem to be more opinionated, especially towards the end of the event, compared to Android users.
+
+### Number of followers per source type
+It is also interesting to analyze the number of followers per source type to conclude whether there is a difference between ‘popular’ accounts in the different source types. 
+
+```{r}
+followers_following_summary <- tweets_whitehouse_conference %>%
+  summarise("average_followers" = round(mean(followers)), "average_following" = round(mean(following))) 
+
+followers_following_summary
+```
+
+On average, Android users have less followers but are following the most people compared to iPhone and Web App users. This is in contrast to Twitter for iPhone and Twitter for Web App, where the average followers of users is higher than the average number of accounts users follow. The highest number of average followers are within the Twitter Web App source.
+
+Interesting to see is that according to Brandwatch (“60 Incredible and Interesting Twitter Stats and Statistics”, 2020), where it is stated that 707 is the average number of followers, all the source types are far beyond this average. Besides looking at the average number of followers per source type, it is interesting to look at the characteristics of the top 10 retweeted tweets. 
+
+```{r}
+retweet_summary <- tweets_whitehouse_conference %>%
+  filter(retweet == TRUE) %>%
+  group_by(text) %>%
+  summarise("number_of_retweets" = n()) %>%
+  arrange(desc(number_of_retweets)) 
+
+retweet_summary
+```
+
+Since some of the tweets listed in table above are posted just before the event started, a manual analysis of the json file (containing all the tweets) was performed to determine the source of the original tweet, and the number of followers of the Twitter account from which the tweet originates. Besides that, columns for polarity and subjectivity were added, shown in table below.
+
+```{r}
+dataframe_retweet_source <- data.frame(source = c("Twitter for iPhone", "Twitter Web Client", "Twitter Web App", 
+                                         "Twitter Web App","Twitter Web App", "Twitter for iPhone", "Twitter for Android",
+                                         "Twitter for iPhone", "Twitter for iPhone", "Twitter for iPhone"),
+                                       polarity = c(0.0500000, 0.1500000, -0.125000, -0.350000, 0.0000000, -0.400000,
+                                                      0.1000000, 0.1619047, 0.1000000, 0.0000000),
+                                       subjectivity = c(0.4000000, 0.3750000, 0.3750000, 0.5833333, 0.1000000, 
+                                                          0.6000000, 0.2000000, 0.8190476, 1.0000000, 0.0000000),
+                                       number_of_followers = c(1309452, 159276, 74190, 90409, 74189, 73244, 8248,
+                                                                 50685, 73244, 50692))
+
+dataframe_retweet_source
+```
+
+Fascinating to see is that only one tweet in the top ten retweets is sent from an Android device. Furthermore, five tweets are sent from an iPhone, three tweets from Web App and one tweet from Twitter Web Client. The latter was posted before the data collection started, and therefore not filtered out in the precleaning stage.
+
+From the table it can be concluded that the most retweeted tweets are sent from Twitter users that use Twitter for iPhone and that these users show high subjectivity. A higher subjectivity is not per se correlated with a positive or negative polarity. All the most popular retweets have a higher number of followers than average. These statistics point into the expected direction, that iPhone users are more influential.
+
+### Number of swear words per source type
+A final interesting factor to assess is whether there is a difference in the expression of opinions between the different source types, by checking the number of swear words that are used in the tweets.
+
+```{r}
+total_swearwords = sum(tweets_whitehouse_conference$swearword_count)
+total_swearwords
+
+swearwords_per_source <- tweets_whitehouse_conference %>%
+  summarise("number_of_swearwords" = sum(swearword_count), 
+            "percentage_of_swearwords" = (sum(swearword_count)/total_swearwords)*100)
+
+swearwords_per_source
+```
+
+42.7% of the total number of swear words in the data, which is 403, are posted and/or retweeted by iPhone users, and thus again iPhone users can be considered as more strongly expressed tweeters. Twitter for Android users and Twitter Web App users are almost identical to each other concerning the number of swear words used. 
+ 
+### Conclusion
+On the basis of the gathered results in the analysis section, the research question mentioned before can be answered: “To what extent does source type (Twitter for Android vs. Twitter for iPhone vs. Twitter Web App) influence tweeting behavior and emotions and subjectivity expressed in the tweet?”
+
+The following statements can be concluded:
+
+As expected, iPhone users seem to be more positive overall compared to Web App and Android users. In addition, iPhone users tend to fluctuate more in emotion than Android users, whereas for Android users there seems to be little variation in average polarity over time.
+
+The difference in average subjectivity across source types is not that big. However, iPhone users have the highest subjectivity, while Twitter for Android users show the lowest subjectivity (i.e., higher objectivity), which means iPhone users tend to express their emotions in a more outgoing way compared to Android users. The high percentage of swear words used by iPhone users compared to Android and Web App users supports this statement. In the analysis Web App is left out of account because the average polarity and average subjectivity fluctuate a lot.
+
+Furthermore, 50% of the top 10 retweeted tweets originate from users from Twitter for iPhone, which leads to the conclusion that iPhone users are more influential. Besides, Twitter for iPhone users also show high subjectivity. However, this does not indicate a high or low polarity up front. In sum, iPhone users express themselves more positively and subjectively in a relatively more outgoing way. Furthermore, iPhone users are more influential in the number of retweets and are more strongly expressed tweeters, based on the number of swear words used, compared to Twitter for Android and Twitter for Web App users.
+
+Overall, the findings in this analysis are consistent with prior literature. The fact that this holds in a political setting (during a political event) is interesting to use as evaluation for the design of future press conferences. It is therefore recommended to keep the structure and tone of the press conferences the same way this was done during this event because Twitter users pay attention during the press conference and search for interaction afterwards.
+
+A recommendation for further research is to make statistical conclusions about the results. After all, the outcomes of this analysis do not take a significance level into account. Therefore, the results could be based on coincidence.
